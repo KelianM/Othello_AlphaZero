@@ -3,10 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class AlphaZeroSimpleCNN(nn.Module):
-    def __init__(self, board_size=6, num_actions=36):
+    def __init__(self, sz=6, num_actions=36):
         super(AlphaZeroSimpleCNN, self).__init__()
         
-        self.board_size = board_size
+        self.board_size = sz
         self.num_actions = num_actions
 
         # Convolutional block
@@ -26,7 +26,7 @@ class AlphaZeroSimpleCNN(nn.Module):
             nn.BatchNorm2d(2),
             nn.ReLU()
         )
-        self.policy_fc = nn.Linear(2 * board_size * board_size, num_actions)  # Output size for policy logits
+        self.policy_fc = nn.Linear(2 * sz * sz, num_actions)  # Output size for policy logits
         
         # Value head
         self.value_conv = nn.Sequential(
@@ -34,7 +34,7 @@ class AlphaZeroSimpleCNN(nn.Module):
             nn.BatchNorm2d(1),
             nn.ReLU()
         )
-        self.value_fc1 = nn.Linear(board_size * board_size, 64)  # Hidden layer for value
+        self.value_fc1 = nn.Linear(sz * sz, 64)  # Hidden layer for value
         self.value_fc2 = nn.Linear(64, 1)  # Scalar value output
 
     def _build_residual_block(self, channels):
@@ -72,3 +72,28 @@ class AlphaZeroSimpleCNN(nn.Module):
         
         # Return as numpy arrays
         return policy.squeeze().detach().numpy(), value.squeeze().detach().numpy()
+    
+def loss_function(pred_policy, pred_value, target_policy, target_value, mse_weight = 0.01):
+    """
+    Computes the loss for a batch of game examples.
+    
+    Arguments:
+    - pred_policy: Tensor of shape [batch_size, num_actions], predicted policy p.
+    - pred_value: Tensor of shape [batch_size, 1], predicted value z.
+    - target_policy: Tensor of shape [batch_size, num_actions], target improved policy pi.
+    - target_value: Tensor of shape [batch_size, 1], target value estimate v.
+    - mse_weight: Value to weight the MSE loss by. Small to avoid overfitting to value.
+    
+    Returns:
+    - total_loss: The combined value loss and policy loss for the batch.
+    """
+    # Value loss: Mean Squared Error (MSE) between predicted value and target value
+    value_loss = F.mse_loss(pred_value, target_value)
+    
+    # Policy loss: Cross-entropy (negative log likelihood) between target policy and predicted policy
+    policy_loss = -(target_policy * torch.log(pred_policy + 1e-10)).sum(dim=1).mean()
+    
+    # Total loss is the sum of value loss and policy loss
+    total_loss = mse_weight*value_loss + policy_loss
+    
+    return total_loss
