@@ -57,10 +57,11 @@ class MCTS:
         self.Q[s][a] = self.W[s][a] / self.N[s][a]
         return -v # Negate to give value according to previous player
     
-    def pi(self, model: OthelloState):
-        """ Return the policy for a model in a given state.
+    def pi(self, s, tau = 1):
+        """ Return the policy according to the search for a given state.
+            Arguments:
+                s - State we are computing the policy for.
+                tau - Exploration parameter.
         """
-        s = model.GetState()
-        total_visits = sum(self.N[s].values())  # Total visits to the state s
-        # Policy for s is the number of visits to each edge (s, a) normalised by total visits to s
-        return [self.N[s][a] / total_visits for a in model.GetValidMoves()]
+        exp_visits = [N_sa**(1/tau) for N_sa in self.N[s].values()]
+        return exp_visits/sum(exp_visits)
