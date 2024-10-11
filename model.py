@@ -73,7 +73,7 @@ class AlphaZeroSimpleCNN(nn.Module):
         # Return as numpy arrays
         return policy.squeeze().detach().numpy(), value.squeeze().detach().numpy()
     
-def loss_function(pred_policy, pred_value, target_policy, target_value, mse_weight = 0.01):
+def compute_loss(pred_policy, pred_value, target_policy, target_value, mse_weight = 0.01):
     """
     Computes the loss for a batch of game examples.
     
@@ -97,3 +97,40 @@ def loss_function(pred_policy, pred_value, target_policy, target_value, mse_weig
     total_loss = mse_weight*value_loss + policy_loss
     
     return total_loss
+
+def train(model, optimizer, epochs, dataloader):
+    """
+    Trains the model using the Adam optimizer and the loss function.
+
+    Arguments:
+    - model: The neural network (CNN).
+    - optimizer: The optimizer (Adam).
+    - epochs: Number of training epochs.
+    - dataloader: A DataLoader that provides batches of (state, target_policy, target_value).
+    """
+    model.train()  # Set the model to training mode
+    
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+
+        for batch in dataloader:
+            states, target_policies, target_values = batch  # Dataloader returns tuples of (state, pi, v)
+
+            # Forward pass: get the predicted policy and value
+            pred_policy, pred_value = model(states)
+
+            # Compute the loss
+            loss = compute_loss(pred_policy, pred_value, target_policies, target_values)
+
+            # Backward pass: compute the gradients
+            optimizer.zero_grad()  # Zero the parameter gradients
+            loss.backward()  # Backpropagate the loss
+
+            # Perform one step of optimization (parameter update)
+            optimizer.step()
+
+            # Accumulate the loss for reporting
+            epoch_loss += loss.item()
+        
+        avg_loss = epoch_loss / len(dataloader)
+        print(f'Epoch {epoch+1}/{epochs}, Loss: {avg_loss:.4f}')
