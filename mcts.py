@@ -17,7 +17,11 @@ class MCTS:
     def get_move_score(self, s, a):
         """ UCT move score with prior as in AlphaZero
         """
-        return self.Q[s][a] + self.c_puct*self.P[s][a]*np.sqrt(sum(self.N[s]))/(1+self.N[s][a])
+        node_visits = sum(self.N[s])
+        if node_visits == 0:
+            return self.P[s][a] # If no edges have been visited, value is just the prior (multiplying by c_puct won't affect action selection)
+        else:
+            return self.Q[s][a] + self.c_puct*self.P[s][a]*np.sqrt(node_visits)/(1+self.N[s][a])
                                                               
     def uct_search(self, root_model: OthelloState, num_iters=100):
         for i in range(num_iters):
@@ -26,7 +30,7 @@ class MCTS:
     
     def uct_search_iter(self, model: OthelloState, nnet):
         """ Recursive UCT search implementation.
-            Uses the NeuralNet (nnet) to predict for value and a prior policy (pi)"""
+            Uses the NeuralNet (nnet) to predict for value v and a prior policy pi"""
         s = model.CloneState()
         if model.GetValidMoves() == []:
             # We don't have to negate this value since `playerJustMoved` is already the previous player (no move was played)
