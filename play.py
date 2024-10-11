@@ -4,22 +4,26 @@ from othello import OthelloState
 from mcts import MCTS
 from nnet import AlphaZeroSimpleCNN
 
-def selfPlayEpisode(model: OthelloState, nnet, num_iters = 100, c_puct = 1):
+def selfPlayEpisode(model: OthelloState, nnet, num_iters = 100, num_explore_steps=10, c_puct = 1):
     examples = []
     model = model.Clone()
     mcts = MCTS(nnet, c_puct=c_puct)
 
+    num_steps = 0
     # Until game end
     while model.GetValidMoves() != []:
+        # Explore with large tau for first `num_explore_steps`
+        tau = 1 if num_steps < num_explore_steps else 1e-8
         # Perform MCTS for num_iters
         mcts.uct_search(model, num_iters=num_iters)
         # Store the current state & MCTS improved policy for the state
-        s = model.CloneState()
-        p = mcts.pi(model)
-        examples.append([s, mcts.pi(s), None]) 
+        s = model.CloneState()        
+        p = mcts.pi(s, tau)
+        examples.append([s, p, None]) 
         # Play according to the improved policy
         a = random.choice(len(p), p=p)
         model.DoMove(a)
+        num_steps += 1
     
     # Assign rewards to all examples
     reward = model.GetResult(playerjm = 1) # From perspective of player 1
