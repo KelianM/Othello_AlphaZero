@@ -11,23 +11,24 @@ from train import train
 def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 100, num_explore_steps=10, c_puct = 1):
     examples = []
     for e in range(num_eps):
+        print(f'Self play episode {e}')
         episode_examples = []
         model = model.Clone()
-        mcts = MCTS(nnet, c_puct=c_puct)
+        mcts = MCTS(nnet, model.AllMoves, c_puct=c_puct)
 
         num_steps = 0
         # Until game end
         while model.GetValidMoves() != []:
             # Explore with large tau for first `num_explore_steps`
-            tau = 1 if num_steps < num_explore_steps else 1e-8
+            tau = 1 if num_steps < num_explore_steps else 0.25
             # Perform MCTS for num_iters
             mcts.uct_search(model, num_iters=num_iters)
             # Store the current state & MCTS improved policy for the state
-            s = model.CloneState()        
+            s = model.GetState()        
             p = mcts.pi(s, tau)
             episode_examples.append([s, p, None]) 
             # Play according to the improved policy
-            a = random.choice(len(p), p=p)
+            a = random.choices(model.AllMoves, weights=p)[0]
             model.DoMove(a)
             num_steps += 1
         
@@ -68,7 +69,7 @@ def pit(model: OthelloState, nnet1, nnet2, num_eps=100, num_iters=100, c_puct = 
     return total_wins/num_eps
 
 def PolicyIteration(model: OthelloState, batch_size=32, epochs=100, lr=0.001, numPolicyIters=1000, numEpsSP=100, numEpsPit=50, numMctsIters=100, c_puct=1, win_thresh=0.55, verbose=False):
-    nnet = AlphaZeroSimpleCNN.init(sz=model.size, num_actions=model.GetNumMoves())
+    nnet = AlphaZeroSimpleCNN(sz=model.size, num_actions=model.NumMoves)
     examples = []
     for i in range(numPolicyIters):
         # Generate self-play data using the current best nnet

@@ -1,56 +1,69 @@
+import torch
 import numpy as np
 from collections import defaultdict
 
 from othello import OthelloState
 
 class MCTS:
-    def __init__(self, nnet, c_puct = 1):
+    def __init__(self, nnet, all_moves, c_puct = 1):
         self.nnet = nnet # Neural Net used for policy prior & value prediction
+        self.all_moves = all_moves # All possible actions
         self.c_puct = c_puct # Exploration parameters
 
-        self.visited = {} # Dict of visited (expanded) states
+        self.visited = [] # Dict of visited (expanded) states
         self.P = {} # Dict of state policies
         self.W = defaultdict(lambda: defaultdict(int)) # Dict of total state-action values
         self.Q = defaultdict(lambda: defaultdict(int)) # Dict of mean state-action values
         self.N = defaultdict(lambda: defaultdict(int)) # Dict of state-action visit counts
-
-    def get_move_score(self, s, a):
-        """ UCT move score with prior as in AlphaZero
-        """
-        node_visits = sum(self.N[s])
-        if node_visits == 0:
-            return self.P[s][a] # If no edges have been visited, value is just the prior (multiplying by c_puct won't affect action selection)
-        else:
-            return self.Q[s][a] + self.c_puct*self.P[s][a]*np.sqrt(node_visits)/(1+self.N[s][a])
                                                               
     def uct_search(self, root_model: OthelloState, num_iters=100):
         for i in range(num_iters):
-            self.uct_search_iter(model=root_model.Clone())
+            self._uct_search_recursive(model=root_model.Clone())
     
-    
-    def uct_search_iter(self, model: OthelloState, nnet):
+    def _uct_search_recursive(self, model: OthelloState):
         """ Recursive UCT search implementation.
             Uses the NeuralNet (nnet) to predict for value v and a prior policy pi"""
-        s = model.CloneState()
-        if model.GetValidMoves() == []:
+        s = model.GetState()
+        valid_moves = model.GetValidMoves()
+        if valid_moves == []:
             # We don't have to negate this value since `playerJustMoved` is already the previous player (no move was played)
             return model.GetResult(model.playerJustMoved)
 
         if s not in self.visited:
-            self.visited.add(s)
-            self.P[s], v = self.nnet.predict(s) # Set this state's policy to a predicted prior
+            self.visited.append(s)
+            with torch.no_grad():
+                # expand state for prediction with the nnet
+                expanded_state = torch.tensor(s, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+                # Set this state's policy to a predicted prior
+                self.P[s], v = self.nnet(expanded_state)
             # Mask out invalid moves
-            valid_moves = model.GetValidMoves()
-            valid_mask = [move in valid_moves for move in model.GetAllMoves()]
+            valid_mask = torch.tensor([move in valid_moves for move in self.all_moves])
             self.P[s] *= valid_mask
             # If the prior is empty, set it to uniform distribution for valid moves
-            if sum(self.P[s]) == 0:
-                self.P[s] = np.ones_like(self.P[s]) * valid_mask / len(valid_moves)
+            if torch.sum(self.P[s]) == 0:
+                self.P[s] = torch.ones_like(self.P[s]) * valid_mask
+            # Re-normalize after removing invalids
+            self.P[s] /= torch.sum(self.P[s])
             return -v # Negate to give value according to previous player
     
-        a = max(model.GetAllMoves(), key = lambda a: self.get_move_score(s, a))        
+        node_visits = sum(self.N[s].values())
+
+        def get_move_score(a):
+            if a not in valid_moves:
+                return float('-inf')
+            a_i = self.all_moves.index(a)
+            U_sa = self.c_puct*self.P[s][a_i].item()*np.sqrt(node_visits)/(1+self.N[s][a])
+            return (self.Q[s][a] + U_sa)
+        
+        # If unexpanded, directly use the prior policy
+        if node_visits == 0:
+            a = self.all_moves[torch.argmax(self.P[s])]
+        else:
+            a = max(self.all_moves, key = lambda a: get_move_score(a))
+                 
         model.DoMove(a)
-        v = self.uct_search()
+        # recursively traverse the tree
+        v = self._uct_search_recursive(model)
 
         self.W[s][a] += v
         self.N[s][a] += 1
@@ -63,5 +76,5 @@ class MCTS:
                 s - State we are computing the policy for.
                 tau - Exploration parameter.
         """
-        exp_visits = [N_sa**(1/tau) for N_sa in self.N[s].values()]
-        return exp_visits/sum(exp_visits)
+        exp_visits = torch.tensor([self.N[s][a]**(1/tau) for a in self.all_moves])
+        return exp_visits/torch.sum(exp_visits)

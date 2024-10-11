@@ -1,4 +1,5 @@
-from torch.utils.data import Dataset, DataLoader
+import torch
+from torch.utils.data import Dataset
 
 class GameDataset(Dataset):
     def __init__(self, examples):
@@ -20,4 +21,5 @@ class GameDataset(Dataset):
     def __getitem__(self, idx):
         """Retrieves the example at the given index."""
         state, pi, v = self.examples[idx]
-        return state, pi, v
+        # Convert data items to tensors
+        return torch.tensor(state, dtype=torch.float32), torch.tensor(pi, dtype=torch.float32), torch.tensor(v, dtype=torch.float32)
