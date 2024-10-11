@@ -1,8 +1,12 @@
 import random
+from torch.utils.data import DataLoader
+import torch.optim as optim
 
 from othello import OthelloState
+from dataset import GameDataset
 from mcts import MCTS
-from model import AlphaZeroSimpleCNN
+from nnet import AlphaZeroSimpleCNN
+from train import train
 
 def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 100, num_explore_steps=10, c_puct = 1):
     examples = []
@@ -63,12 +67,19 @@ def pit(model: OthelloState, nnet1, nnet2, num_eps=100, num_iters=100, c_puct = 
     # return reward rate
     return total_wins/num_eps
 
-def PolicyIteration(model: OthelloState, numPolicyIters=1000, numEpsSP=100, numEpsPit=50, numMctsIters=100, c_puct=1, win_thresh=0.55, verbose=False):
+def PolicyIteration(model: OthelloState, batch_size=32, epochs=100, lr=0.001, numPolicyIters=1000, numEpsSP=100, numEpsPit=50, numMctsIters=100, c_puct=1, win_thresh=0.55, verbose=False):
     nnet = AlphaZeroSimpleCNN.init(sz=model.size, num_actions=model.GetNumMoves())
-    examples = []    
+    examples = []
     for i in range(numPolicyIters):
+        # Generate self-play data using the current best nnet
         examples.extend(selfPlay(model, nnet, num_eps=numEpsSP, num_iters=numMctsIters, c_puct=c_puct))
-        new_nnet = nnet.train(examples)                  
+        # Create the dataset and dataloader
+        dataset = GameDataset(examples)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+        # Train a new checkpoint
+        optimizer = optim.Adam(nnet.parameters(), lr=lr)
+        new_nnet = train(nnet, optimizer=optimizer, epochs=epochs, dataloader=dataloader)
+        # Pit the model's against each other and update the best model if it exceeds the win threshold
         win_rate = pit(model, nnet1=new_nnet, nnet2=nnet, num_eps=numEpsPit, num_iters=numMctsIters, c_puct=c_puct)
         if win_rate > win_thresh: 
             nnet = new_nnet
