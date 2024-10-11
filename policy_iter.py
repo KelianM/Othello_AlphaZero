@@ -8,32 +8,32 @@ from mcts import MCTS
 from nnet import AlphaZeroSimpleCNN
 from train import train
 
-def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 100, num_explore_steps=10, c_puct = 1):
+def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 20, num_explore_steps=5, c_puct = 1):
     examples = []
     for e in range(num_eps):
-        print(f'Self play episode {e}')
         episode_examples = []
-        model = model.Clone()
-        mcts = MCTS(nnet, model.AllMoves, c_puct=c_puct)
+        episode_model = model.Clone()
+        mcts = MCTS(nnet, all_moves=episode_model.AllMoves, c_puct=c_puct)
 
         num_steps = 0
         # Until game end
-        while model.GetValidMoves() != []:
+        while episode_model.GetValidMoves() != []:
             # Explore with large tau for first `num_explore_steps`
             tau = 1 if num_steps < num_explore_steps else 0.25
             # Perform MCTS for num_iters
-            mcts.uct_search(model, num_iters=num_iters)
+            mcts.uct_search(episode_model, num_iters=num_iters)
             # Store the current state & MCTS improved policy for the state
-            s = model.GetState()        
+            s = episode_model.GetState()        
             p = mcts.pi(s, tau)
             episode_examples.append([s, p, None]) 
             # Play according to the improved policy
-            a = random.choices(model.AllMoves, weights=p)[0]
-            model.DoMove(a)
+            a = random.choices(episode_model.AllMoves, weights=p)[0]
+            episode_model.DoMove(a)
             num_steps += 1
+        print(f'Self Play Episode {e}: Finished in {num_steps} steps')
         
         # Assign rewards to all examples from this episode
-        reward = model.GetResult(playerjm = 1) # From perspective of player 1
+        reward = episode_model.GetResult(playerjm = 1) # From perspective of player 1
         for i in range(len(episode_examples)):
             episode_examples[i][2] = reward
             reward = -reward # Reward alternates each step for opposite player's perspective
@@ -46,25 +46,25 @@ def pit(model: OthelloState, nnet1, nnet2, num_eps=100, num_iters=100, c_puct = 
     """
     total_wins = 0
     for e in range(num_eps):
-        model = model.Clone()
+        episode_model = model.Clone()
         # Hold a separate MCTS instance for each playet (each nnet)
-        mcts1 = MCTS(nnet=nnet1, c_puct=c_puct) # Player 1
-        mcts2 = MCTS(nnet=nnet2, c_puct=c_puct) # Player 2
+        mcts1 = MCTS(nnet=nnet1, all_moves=episode_model.AllMoves, c_puct=c_puct) # Player 1
+        mcts2 = MCTS(nnet=nnet2, all_moves=episode_model.AllMoves, c_puct=c_puct) # Player 2
 
         # Until game end
-        while model.GetValidMoves() != []:
+        while episode_model.GetValidMoves() != []:
             # Perform MCTS for num_iters for the correct player's MCTS
-            if model.GetPlayerToMove() == 1:
-                mcts1.uct_search(model, num_iters=num_iters)
-                p = mcts1.pi(model)
+            if episode_model.GetPlayerToMove() == 1:
+                mcts1.uct_search(episode_model, num_iters=num_iters)
+                p = mcts1.pi(episode_model)
             else:
-                mcts2.uct_search(model, num_iters=num_iters)
-                p = mcts2.pi(model)
+                mcts2.uct_search(episode_model, num_iters=num_iters)
+                p = mcts2.pi(episode_model)
             # Store the current state & MCTS improved policy for the state
             # Play according to the improved policy
             a = random.choice(len(p), p=p)
-            model.DoMove(a)
-        if model.GetResult(playerjm=1) > 1: total_wins += 1 # Result from player 1's perspective
+            episode_model.DoMove(a)
+        if episode_model.GetResult(playerjm=1) > 1: total_wins += 1 # Result from player 1's perspective
     # return reward rate
     return total_wins/num_eps
 
