@@ -21,5 +21,10 @@ class GameDataset(Dataset):
     def __getitem__(self, idx):
         """Retrieves the example at the given index."""
         state, pi, v = self.examples[idx]
-        # Convert data items to tensors
-        return torch.tensor(state, dtype=torch.float32), torch.tensor(pi, dtype=torch.float32), torch.tensor(v, dtype=torch.float32)
+        # Add a channel dimension to state
+        expanded_state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        # Clone policy tensor
+        pi = pi.clone().detach().requires_grad_(True)
+        # Convert value to tensor
+        v = torch.tensor(v, dtype=torch.float32)
+        return expanded_state, pi, v

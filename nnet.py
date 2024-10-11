@@ -47,6 +47,7 @@ class AlphaZeroSimpleCNN(nn.Module):
         )
 
     def forward(self, x):
+        # x is (bsz, c, h, w)
         # Initial conv block
         x = self.conv_block(x)
         
