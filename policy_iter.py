@@ -1,4 +1,5 @@
 import random
+import copy
 from torch.utils.data import DataLoader
 import torch.optim as optim
 
@@ -8,7 +9,7 @@ from mcts import MCTS
 from nnet import AlphaZeroSimpleCNN
 from train import train
 
-def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 20, num_explore_steps=5, c_puct = 1):
+def selfPlay(model: OthelloState, nnet, num_eps = 1, num_iters = 10, num_explore_steps=5, c_puct = 1):
     examples = []
     for e in range(num_eps):
         episode_examples = []
@@ -40,7 +41,7 @@ def selfPlay(model: OthelloState, nnet, num_eps = 30, num_iters = 20, num_explor
         examples.extend(episode_examples)
     return examples
  
-def pit(model: OthelloState, nnet1, nnet2, num_eps=100, num_iters=100, c_puct = 1):
+def pit(model: OthelloState, nnet1, nnet2, num_eps=1, num_iters=10, c_puct = 1):
     """ Pits to nnet1 (player 1) and nnet2 (player 2) against each other.
         Returns win rate from perspective of nnet1.
     """
@@ -62,14 +63,15 @@ def pit(model: OthelloState, nnet1, nnet2, num_eps=100, num_iters=100, c_puct = 
                 p = mcts2.pi(episode_model)
             # Store the current state & MCTS improved policy for the state
             # Play according to the improved policy
-            a = random.choice(len(p), p=p)
+            a = random.choices(episode_model.AllMoves, weights=p)[0]
             episode_model.DoMove(a)
         if episode_model.GetResult(playerjm=1) > 1: total_wins += 1 # Result from player 1's perspective
     # return reward rate
     return total_wins/num_eps
 
-def PolicyIteration(model: OthelloState, batch_size=32, epochs=100, lr=0.001, numPolicyIters=1000, numEpsSP=100, numEpsPit=50, numMctsIters=100, c_puct=1, win_thresh=0.55, verbose=False):
+def PolicyIteration(model: OthelloState, batch_size=32, epochs=5, lr=0.001, numPolicyIters=10, numEpsSP=1, numEpsPit=10, numMctsIters=10, c_puct=1, win_thresh=0.55, verbose=False):
     nnet = AlphaZeroSimpleCNN(sz=model.size, num_actions=model.NumMoves)
+    best_nnet = copy.deepcopy(nnet)
     examples = []
     for i in range(numPolicyIters):
         # Generate self-play data using the current best nnet
@@ -79,11 +81,11 @@ def PolicyIteration(model: OthelloState, batch_size=32, epochs=100, lr=0.001, nu
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
         # Train a new checkpoint
         optimizer = optim.Adam(nnet.parameters(), lr=lr)
-        new_nnet = train(nnet, optimizer=optimizer, epochs=epochs, dataloader=dataloader)
+        train(nnet, optimizer=optimizer, epochs=epochs, dataloader=dataloader)
         # Pit the model's against each other and update the best model if it exceeds the win threshold
-        win_rate = pit(model, nnet1=new_nnet, nnet2=nnet, num_eps=numEpsPit, num_iters=numMctsIters, c_puct=c_puct)
+        win_rate = pit(model, nnet1=nnet, nnet2=best_nnet, num_eps=numEpsPit, num_iters=numMctsIters, c_puct=c_puct)
         if win_rate > win_thresh: 
-            nnet = new_nnet
+            best_nnet = copy.deepcopy(nnet)
             if verbose:
                 print(f"Network improved with win rate {win_rate}!")
     return nnet
