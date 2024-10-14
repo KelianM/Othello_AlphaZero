@@ -1,5 +1,5 @@
 import random
-import copy
+import logging
 from torch.utils.data import DataLoader
 import torch.optim as optim
 
@@ -8,6 +8,8 @@ from dataset import GameDataset
 from mcts import MCTS
 from nnet import AlphaZeroSimpleCNN
 from train import train
+
+log = logging.getLogger(__name__)
 
 def selfPlay(model: OthelloState, nnet, args):
     examples = []
@@ -19,8 +21,8 @@ def selfPlay(model: OthelloState, nnet, args):
         num_steps = 0
         # Until game end
         while episode_model.GetValidMoves() != []:
-            # Explore with large tau for first `num_explore_steps`
-            temp = 1 if num_steps < args.numExploreIters else 0
+            # Explore with large temp for first `numExploreSteps`
+            temp = 1 if num_steps < args.numExploreSteps else 0
             # Perform MCTS for num_iters
             mcts.uct_search(episode_model, num_iters=args.numMctsIters)
             # Store the current state & MCTS improved policy for the state
@@ -31,7 +33,7 @@ def selfPlay(model: OthelloState, nnet, args):
             a = random.choices(episode_model.AllMoves, weights=p)[0]
             episode_model.DoMove(a)
             num_steps += 1
-        print(f'Self Play Episode {e}: Finished in {num_steps} steps')
+        log.info(f'Self Play Episode {e}: Finished in {num_steps} steps')
         
         # Assign rewards to all examples from this episode
         reward = episode_model.GetResult(playerjm = 1) # From perspective of player 1
@@ -52,6 +54,7 @@ def pit(model: OthelloState, nnet1, nnet2, args):
         mcts1 = MCTS(nnet=nnet1, all_moves=episode_model.AllMoves, c_puct=args.cpuct) # Player 1
         mcts2 = MCTS(nnet=nnet2, all_moves=episode_model.AllMoves, c_puct=args.cpuct) # Player 2
 
+        num_steps = 0
         # Until game end
         while episode_model.GetValidMoves() != []:
             # Perform MCTS for num_iters for the correct player's MCTS
@@ -66,13 +69,18 @@ def pit(model: OthelloState, nnet1, nnet2, args):
             # Play according to the improved policy
             a = random.choices(episode_model.AllMoves, weights=p)[0]
             episode_model.DoMove(a)
-        if episode_model.GetResult(playerjm=1) > 1: total_wins += 1 # Result from player 1's perspective
+            num_steps += 1
+        if episode_model.GetResult(playerjm=1) == 1: total_wins += 1 # Result from player 1's perspective
+        log.info(f'Pit Episode {e}: Finished in {num_steps} steps')
     # return reward rate
     return total_wins/args.numEpsPit
 
 def PolicyIteration(model: OthelloState, args):
     nnet = AlphaZeroSimpleCNN(sz=model.size, num_actions=model.NumMoves)
-    best_nnet = copy.deepcopy(nnet)
+    best_nnet = AlphaZeroSimpleCNN(sz=model.size, num_actions=model.NumMoves)
+    
+    nnet.save_checkpoint(folder=args.checkpointDir, filename='temp.pth.tar')
+    best_nnet.load_checkpoint(folder=args.checkpointDir, filename='temp.pth.tar')
     examples_history = []
     for i in range(args.numPolicyIters):
         # Generate self-play data using the current best nnet
@@ -91,8 +99,11 @@ def PolicyIteration(model: OthelloState, args):
         train(nnet, optimizer=optimizer, epochs=args.epochs, dataloader=dataloader)
         # Pit the model's against each other and update the best model if it exceeds the win threshold
         win_rate = pit(model, nnet1=nnet, nnet2=best_nnet, args=args)
-        if win_rate > args.winThresh: 
-            best_nnet = copy.deepcopy(nnet)
-            if args.verbose:
-                print(f"Network improved with win rate {win_rate}!")
+        nnet.save_checkpoint(folder=args.checkpointDir, filename='temp.pth.tar')
+        if win_rate > args.winThresh:
+            log.info(f"Accepting new model with win-rate {win_rate}.")
+            nnet.save_checkpoint(folder=args.checkpointDir, filename='best.pth.tar')
+            best_nnet.load_checkpoint(folder=args.checkpointDir, filename='best.pth.tar')
+        else:
+            log.info(f"Rejecting new model with win-rate {win_rate}.")
     return nnet

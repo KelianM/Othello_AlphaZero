@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -73,3 +74,21 @@ class AlphaZeroSimpleCNN(nn.Module):
         value = torch.tanh(self.value_fc2(value))  # Output value in range [-1, 1]
         
         return policy.squeeze(), value.squeeze()
+    
+    def save_checkpoint(self, folder, filename='temp.pth.tar'):
+        # Create the directory if it doesn't exist
+        filepath = os.path.join(folder, filename)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        
+        torch.save(self.state_dict(), filepath)
+
+    def load_checkpoint(self, folder, filename='temp.pth.tar'):
+        # Construct the file path
+        filepath = os.path.join(folder, filename)
+        
+        # Check if the file exists
+        if os.path.isfile(filepath):
+            self.load_state_dict(torch.load(filepath, weights_only=False))
+        else:
+            print(f"No checkpoint found at {filepath}")
