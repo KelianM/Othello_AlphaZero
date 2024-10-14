@@ -14,11 +14,11 @@ class dotdict(dict):
 
 args = dotdict({
     'batchSize': 32,
-    'epochs': 30,
+    'epochs': 75,
     'learningRate': 0.001,
     'numPolicyIters': 10,
-    'numEpsSp': 10,
-    'numEpsPit': 10,
+    'numEpsSp': 50,
+    'numEpsPit': 30,
     'numExploreSteps': 3,
     'numMctsIters': 30,
     'cpuct': 1.414,
