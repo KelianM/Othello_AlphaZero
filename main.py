@@ -7,17 +7,17 @@ class dotdict(dict):
 
 args = dotdict({
     'batchSize': 32,
-    'epochs': 5,
+    'epochs': 50,
     'learningRate': 0.001,
     'numPolicyIters': 10,
-    'numEpsSp': 1,
-    'numEpsPit': 1,
+    'numEpsSp': 100,
+    'numEpsPit': 30,
     'numExploreIters': 10,
-    'numMctsIters': 10,
-    'cpuct': 1,
+    'numMctsIters': 30,
+    'cpuct': 1.414,
     'numItersForTrainHist': 20,
     'winThresh': 0.55,
-    'verbose': False
+    'verbose': True
 })
 
 if __name__ == '__main__':
