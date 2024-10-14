@@ -82,4 +82,5 @@ class MCTS:
             max_visits = torch.where(visits == torch.max(visits), torch.ones_like(visits), torch.zeros_like(visits))
             return max_visits/torch.sum(max_visits)
         else:
-            return torch.tensor([self.N[s][a]**(1/temp) for a in self.all_moves])/torch.sum(visits)
+            exp_visits = torch.tensor([self.N[s][a]**(1/temp) for a in self.all_moves])
+            return exp_visits/torch.sum(exp_visits)
