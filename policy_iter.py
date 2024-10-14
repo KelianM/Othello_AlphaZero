@@ -9,7 +9,7 @@ from mcts import MCTS
 from nnet import AlphaZeroSimpleCNN
 from train import train
 
-def selfPlay(model: OthelloState, nnet, num_eps = 1, num_iters = 10, num_explore_steps=5, c_puct = 1):
+def selfPlay(model: OthelloState, nnet, num_eps = 1, num_iters = 10, num_explore_steps=10, c_puct = 1):
     examples = []
     for e in range(num_eps):
         episode_examples = []
@@ -20,12 +20,12 @@ def selfPlay(model: OthelloState, nnet, num_eps = 1, num_iters = 10, num_explore
         # Until game end
         while episode_model.GetValidMoves() != []:
             # Explore with large tau for first `num_explore_steps`
-            tau = 1 if num_steps < num_explore_steps else 0.25
+            temp = 1 if num_steps < num_explore_steps else 0
             # Perform MCTS for num_iters
             mcts.uct_search(episode_model, num_iters=num_iters)
             # Store the current state & MCTS improved policy for the state
             s = episode_model.GetState()        
-            p = mcts.pi(s, tau)
+            p = mcts.pi(s, temp)
             episode_examples.append([s, p, None]) 
             # Play according to the improved policy
             a = random.choices(episode_model.AllMoves, weights=p)[0]
@@ -57,10 +57,10 @@ def pit(model: OthelloState, nnet1, nnet2, num_eps=1, num_iters=10, c_puct = 1):
             # Perform MCTS for num_iters for the correct player's MCTS
             if episode_model.GetPlayerToMove() == 1:
                 mcts1.uct_search(episode_model, num_iters=num_iters)
-                p = mcts1.pi(episode_model)
+                p = mcts1.pi(episode_model, temp=0)
             else:
                 mcts2.uct_search(episode_model, num_iters=num_iters)
-                p = mcts2.pi(episode_model)
+                p = mcts2.pi(episode_model, temp=0)
             # Store the current state & MCTS improved policy for the state
             # Play according to the improved policy
             a = random.choices(episode_model.AllMoves, weights=p)[0]

@@ -70,11 +70,16 @@ class MCTS:
         self.Q[s][a] = self.W[s][a] / self.N[s][a]
         return -v # Negate to give value according to previous player
     
-    def pi(self, s, tau = 1):
-        """ Return the policy according to the search for a given state.
+    def pi(self, s, temp = 1):
+        """ Return the policy according to the search for a given state using number of edge visits.
             Arguments:
                 s - State we are computing the policy for.
-                tau - Exploration parameter.
+                temp - Exploration parameter.
         """
-        exp_visits = torch.tensor([self.N[s][a]**(1/tau) for a in self.all_moves])
-        return exp_visits/torch.sum(exp_visits)
+        if temp == 0:
+            # Temp == 0 is a special case where we return equal likelihhod for all the most-visited edges
+            visits = torch.tensor([self.N[s][a] for a in self.all_moves])
+            max_visits = torch.where(visits == torch.max(visits), torch.ones_like(visits), torch.zeros_like(visits))
+            return max_visits/torch.sum(max_visits)
+        else:
+            return torch.tensor([self.N[s][a]**(1/temp) for a in self.all_moves])/torch.sum(visits)
