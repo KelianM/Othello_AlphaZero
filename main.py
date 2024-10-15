@@ -17,13 +17,13 @@ class dotdict(dict):
 
 args = dotdict({
     'batchSize': 32,
-    'epochs': 75,
+    'epochs': 100,
     'learningRate': 0.001,
-    'numPolicyIters': 1,
-    'numEpsSp': 50,
-    'numEpsPit': 30,
-    'numExploreSteps': 3,
-    'numMctsIters': 30,
+    'numPolicyIters': 20,
+    'numEpsSp': 100,
+    'numEpsPit': 50,
+    'numExploreSteps': 5,
+    'numMctsIters': 50,
     'cpuct': 1.414,
     'numItersForTrainHist': 20,
     'winThresh': 0.55,
@@ -32,7 +32,7 @@ args = dotdict({
 })
 
 if __name__ == '__main__':
-    board_size = 4
+    board_size = 6
     log.info(f'Playing Othello with board size {board_size}')
     model = OthelloState(board_size)
     if args.loadNnet:
